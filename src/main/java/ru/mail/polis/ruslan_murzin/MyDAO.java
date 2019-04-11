@@ -1,10 +1,9 @@
-package ru.mail.polis.Inmemory;
+package ru.mail.polis.ruslan_murzin;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-
 
 import org.jetbrains.annotations.NotNull;
 
@@ -12,8 +11,7 @@ import ru.mail.polis.DAO;
 import ru.mail.polis.Record;
 
 public class MyDAO implements DAO {
-
-    private NavigableMap<ByteBuffer, Record> map = new TreeMap<>();
+    private final NavigableMap<ByteBuffer, Record> map = new TreeMap<>();
 
     @NotNull
     @Override

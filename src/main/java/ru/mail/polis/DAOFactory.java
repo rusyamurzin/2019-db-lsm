@@ -21,7 +21,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.io.IOException;
 
-import ru.mail.polis.Inmemory.MyDAO;
+import ru.mail.polis.ruslan_murzin.MyDAO;
 
 /**
  * Custom {@link DAO} factory
