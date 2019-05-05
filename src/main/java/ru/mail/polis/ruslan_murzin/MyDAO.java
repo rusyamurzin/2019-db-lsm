@@ -1,36 +1,120 @@
 package ru.mail.polis.ruslan_murzin;
 
-import java.nio.ByteBuffer;
-import java.util.Iterator;
-import java.util.NavigableMap;
-import java.util.TreeMap;
-
+import com.google.common.collect.Iterators;
 import org.jetbrains.annotations.NotNull;
-
 import ru.mail.polis.DAO;
+import ru.mail.polis.Iters;
 import ru.mail.polis.Record;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.stream.Collectors;
+
 public class MyDAO implements DAO {
-    private final NavigableMap<ByteBuffer, Record> map = new TreeMap<>();
+    public static final String BASE_NAME = "SSTable";
+    public static final String SUFFIX = ".dat";
+    public static final String TEMP = ".tmp";
+
+    private Table memTable = new MemTable();
+    private final long flushThreshold;
+    private final File base;
+    private int generation;
+    private List<FileTable> fileTables;
+
+    public MyDAO(
+            final File base,
+            final long flushThreshold) throws IOException{
+        this.base = base;
+        assert flushThreshold >= 0L;
+        this.flushThreshold = flushThreshold;
+        fileTables = new ArrayList<>();
+
+        final Collection<Path> files = Files.walk(base.toPath(), 1).filter(path -> path.getFileName().toString().endsWith(SUFFIX)).collect(Collectors.toList());
+        generation = -1;
+        files.forEach(path -> {
+            final File file = path.toFile();
+            try {
+                final FileTable fileTable = new FileTable(file);
+                fileTables.add(fileTable);
+                generation = Math.max(generation, getGenerationOf(file.getName()));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+        generation++;
+    }
 
     @NotNull
     @Override
-    public Iterator<Record> iterator(@NotNull ByteBuffer from) {
-        return map.tailMap(from, true).values().iterator();
+    public Iterator<Record> iterator(@NotNull ByteBuffer from) throws IOException {
+        final List<Iterator<Cell>> listIterators = new ArrayList<>();
+        for(FileTable fileTable : fileTables) {
+            listIterators.add(fileTable.iterator(from));
+        }
+        final Iterator<Cell> memIterator = memTable.iterator(from);
+        listIterators.add(memIterator);
+        final Iterator<Cell> cells = Iters.collapseEquals(Iterators.mergeSorted(listIterators, Cell.COMPARATOR));
+
+        final Iterator<Cell> alive =
+                Iterators.filter(
+                        cells,
+                        cell -> cell == null || cell.getValue() == null || !cell.getValue().isRemoved()
+                        );
+        return Iterators.transform(
+                alive,
+                cell -> {
+                    assert cell != null && cell.getKey() != null;
+                    return Record.of(cell.getKey(), cell.getValue().getData());
+                });
     }
 
     @Override
-    public void upsert(@NotNull ByteBuffer key, @NotNull ByteBuffer value) {
-        map.put(key, Record.of(key, value));
+    public void upsert(@NotNull ByteBuffer key, @NotNull ByteBuffer value) throws IOException {
+        memTable.upsert(key, value);
+        checkThreshold();
+    }
+
+    private void checkThreshold() throws IOException{
+        if (memTable.sizeInBytes() > flushThreshold) {
+            flush();
+        }
+    }
+
+    private void flush() throws IOException {
+        final File tmp = new File(base, generation + BASE_NAME + TEMP);
+        FileTable.write(memTable.iterator(ByteBuffer.allocate(0)), tmp);
+        final File dest = new File(base, generation + BASE_NAME + SUFFIX);
+        Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.ATOMIC_MOVE);
+        fileTables.add(new FileTable(dest));
+        generation++;
+        memTable.clear();
     }
 
     @Override
-    public void remove(@NotNull ByteBuffer key) {
-        map.remove(key);
+    public void remove(@NotNull ByteBuffer key) throws IOException {
+        memTable.remove(key);
+        checkThreshold();
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
+        flush();
+    }
 
+    private int getGenerationOf(final String name) {
+        for (int i = 0; i < name.length(); i++) {
+            if (!Character.isDigit(name.charAt(i))) {
+                return i == 0 ? 0 : Integer.parseInt(name.substring(0, i));
+            }
+        }
+        return -1;
     }
 }
