@@ -1,5 +1,7 @@
 package ru.mail.polis.ruslan_murzin;
+
 import com.google.common.collect.Iterators;
+
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -22,9 +24,7 @@ public class MemTable implements Table {
     public Iterator<Cell> iterator(@NotNull ByteBuffer from) throws IOException {
         return Iterators.transform(
                 map.tailMap(from).entrySet().iterator(),
-                e -> e != null ?
-                        new Cell(e.getKey(), e.getValue()):
-                        null);
+                e -> new Cell(e.getKey(), e.getValue()));
     }
 
     @Override

@@ -1,10 +1,12 @@
 package ru.mail.polis.ruslan_murzin;
+
 import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.LongBuffer;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -18,26 +20,28 @@ public class FileTable implements Table {
 
     public FileTable(final File file) throws IOException {
         final long fileSize = file.length();
-        final ByteBuffer mapped;
+        final MappedByteBuffer mapped;
+        final ByteBuffer simple;
         try (
                 FileChannel fc = FileChannel.open(file.toPath(), StandardOpenOption.READ)) {
             assert fileSize <= Integer.MAX_VALUE;
-            mapped = fc.map(FileChannel.MapMode.READ_ONLY, 0L, fileSize).order(ByteOrder.BIG_ENDIAN);
+            mapped = fc.map(FileChannel.MapMode.READ_ONLY, 0L, fileSize);
+            simple = mapped.order(ByteOrder.BIG_ENDIAN);
         }
 
         // Rows
-        final long rowsValue = mapped.getLong((int) (fileSize - Long.BYTES));
+        final long rowsValue = simple.getLong((int) (fileSize - Long.BYTES));
         assert rowsValue <= Integer.MAX_VALUE;
         this.rows = (int) rowsValue;
 
         // Offset
-        final ByteBuffer offsetBuffer = mapped.duplicate();
-        offsetBuffer.position(mapped.limit() - Long.BYTES * rows - Long.BYTES);
-        offsetBuffer.limit(mapped.limit() - Long.BYTES);
+        final ByteBuffer offsetBuffer = simple.duplicate();
+        offsetBuffer.position(simple.limit() - Long.BYTES * rows - Long.BYTES);
+        offsetBuffer.limit(simple.limit() - Long.BYTES);
         this.offsets = offsetBuffer.slice().asLongBuffer();
 
         // Cells
-        final ByteBuffer cellBuffer = mapped.duplicate();
+        final ByteBuffer cellBuffer = simple.duplicate();
         cellBuffer.limit(offsetBuffer.position());
         this.cells = cellBuffer.slice();
     }
@@ -85,7 +89,7 @@ public class FileTable implements Table {
                 fc.write(Bytes.fromLong(anOffset));
             }
 
-            //Cells
+            // Cells
             fc.write(Bytes.fromLong(offsets.size()));
         }
     }
@@ -106,7 +110,7 @@ public class FileTable implements Table {
         long offset = offsets.get(i);
         assert offset <= Integer.MAX_VALUE;
 
-        //Key
+        // Key
         final int keySize = cells.getInt((int) offset);
         offset += Integer.BYTES;
         final ByteBuffer key = cells.duplicate();
@@ -114,7 +118,7 @@ public class FileTable implements Table {
         key.limit(key.position() + keySize);
         offset += keySize;
 
-        //Timestamp
+        // Timestamp
         final long timeStamp = cells.getLong((int) offset);
         offset += Long.BYTES;
 

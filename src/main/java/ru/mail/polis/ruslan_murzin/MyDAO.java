@@ -1,7 +1,9 @@
 package ru.mail.polis.ruslan_murzin;
 
 import com.google.common.collect.Iterators;
+
 import org.jetbrains.annotations.NotNull;
+
 import ru.mail.polis.DAO;
 import ru.mail.polis.Iters;
 import ru.mail.polis.Record;
@@ -66,14 +68,11 @@ public class MyDAO implements DAO {
         final Iterator<Cell> alive =
                 Iterators.filter(
                         cells,
-                        cell -> cell == null || cell.getValue() == null || !cell.getValue().isRemoved()
+                        cell -> !cell.getValue().isRemoved()
                         );
         return Iterators.transform(
                 alive,
-                cell -> {
-                    assert cell != null && cell.getKey() != null;
-                    return Record.of(cell.getKey(), cell.getValue().getData());
-                });
+                cell -> Record.of(cell.getKey(), cell.getValue().getData()));
     }
 
     @Override
@@ -112,7 +111,20 @@ public class MyDAO implements DAO {
     private int getGenerationOf(final String name) {
         for (int i = 0; i < name.length(); i++) {
             if (!Character.isDigit(name.charAt(i))) {
-                return i == 0 ? 0 : Integer.parseInt(name.substring(0, i));
+                if (i == 0) {
+                    return 0;
+                }
+                else {
+                    long genLong = Long.parseLong(name.substring(0, i));
+                    if (genLong > Integer.MAX_VALUE) {
+                        return Integer.MAX_VALUE;
+                    } else if (genLong < Integer.MIN_VALUE) {
+                        return Integer.MIN_VALUE;
+                    }
+                    else {
+                        return (int) genLong;
+                    }
+                }
             }
         }
         return -1;

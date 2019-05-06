@@ -3,8 +3,7 @@ package ru.mail.polis.ruslan_murzin;
 import java.nio.ByteBuffer;
 
 public final class Bytes {
-    public Bytes() {
-    }
+    public Bytes() {}
 
     static ByteBuffer fromInt(final int value) {
         final ByteBuffer result = ByteBuffer.allocate(Integer.BYTES);
