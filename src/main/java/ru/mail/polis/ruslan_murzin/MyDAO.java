@@ -15,10 +15,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.NoSuchElementException;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 public class MyDAO implements DAO {
     public static final String BASE_NAME = "SSTable";
@@ -38,20 +41,18 @@ public class MyDAO implements DAO {
         assert flushThreshold >= 0L;
         this.flushThreshold = flushThreshold;
         fileTables = new ArrayList<>();
+        generation = 0;
 
-        final Collection<Path> files = Files.walk(base.toPath(), 1).filter(path -> path.getFileName().toString().endsWith(SUFFIX)).collect(Collectors.toList());
-        generation = -1;
-        files.forEach(path -> {
-            final File file = path.toFile();
-            try {
-                final FileTable fileTable = new FileTable(file);
-                fileTables.add(fileTable);
-                generation = Math.max(generation, getGenerationOf(file.getName()));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
-        generation++;
+        try (Stream<Path> files = Files.walk(base.toPath())) {
+            files.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(SUFFIX))
+                    .forEach(p -> {
+                        fileTables.add(new FileTable(p.toFile()));
+                        generation = Math.max(generation, getGenerationOf(p.getFileName().toString()));
+                    });
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     @NotNull
@@ -95,6 +96,52 @@ public class MyDAO implements DAO {
         fileTables.add(new FileTable(dest));
         generation++;
         memTable.clear();
+    }
+
+    @NotNull
+    @Override
+    public ByteBuffer get(@NotNull final ByteBuffer key) throws IOException, NoSuchElementException {
+        final Cell memCell = memTable.get(key);
+
+        if (memCell != null) {
+            if (memCell.getValue().isRemoved()) {
+                throw new NoSuchElementException("");
+            }
+            return memCell.getValue().getData();
+        }
+
+        final ConcurrentLinkedQueue<Cell> cells = new ConcurrentLinkedQueue<>();
+        final AtomicInteger counter = new AtomicInteger(0);
+        fileTables.forEach(table -> new Thread(() -> {
+            try {
+                final Cell cell = table.get(key);
+
+                if (cell != null) {
+                    cells.add(cell);
+                }
+            } finally {
+                counter.incrementAndGet();
+            }
+        }).start());
+
+        while (counter.get() < fileTables.size()) {
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        if (cells.size() == 0) {
+            throw new NoSuchElementException("");
+        }
+
+        final Cell cell = Collections.min(cells, Cell.COMPARATOR);
+        if (cell == null || cell.getValue().isRemoved()) {
+            throw new NoSuchElementException("");
+        }
+        final Record record = Record.of(cell.getKey(), cell.getValue().getData());
+        return record.getValue();
     }
 
     @Override

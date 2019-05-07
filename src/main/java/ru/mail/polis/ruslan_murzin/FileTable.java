@@ -2,52 +2,46 @@ package ru.mail.polis.ruslan_murzin;
 
 import org.jetbrains.annotations.NotNull;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.LongBuffer;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
 public class FileTable implements Table {
-    private final int rows;
-    private final LongBuffer offsets;
-    private final ByteBuffer cells;
+    private int rows;
+    private LongBuffer offsets;
+    private ByteBuffer cells;
 
-    public FileTable(final File file) throws IOException {
-        final long fileSize = file.length();
-        final MappedByteBuffer mapped;
-        final ByteBuffer simple;
-        try (
-                FileChannel fc = FileChannel.open(file.toPath(), StandardOpenOption.READ)) {
+    public FileTable(final File file) {
+        try (FileChannel fc = (FileChannel) Files.newByteChannel(file.toPath(), StandardOpenOption.READ)) {
+            final long fileSize = file.length();
             assert fileSize <= Integer.MAX_VALUE;
-            mapped = fc.map(FileChannel.MapMode.READ_ONLY, 0L, fileSize);
-            simple = mapped.order(ByteOrder.BIG_ENDIAN);
+
+            // Rows
+            long offset = fc.size() - Long.BYTES;
+            final long rowsValue = readLong(fc, offset);
+            assert rowsValue <= Integer.MAX_VALUE;
+            this.rows = (int) rowsValue;
+
+            // Offsets
+            offset -= Long.BYTES * rows;
+            this.offsets = readBuffer(fc, offset, Long.BYTES * rows).asLongBuffer();
+
+            // Cells
+            this.cells = readBuffer(fc, 0, (int) offset);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-
-        // Rows
-        final long rowsValue = simple.getLong((int) (fileSize - Long.BYTES));
-        assert rowsValue <= Integer.MAX_VALUE;
-        this.rows = (int) rowsValue;
-
-        // Offset
-        final ByteBuffer offsetBuffer = simple.duplicate();
-        offsetBuffer.position(simple.limit() - Long.BYTES * rows - Long.BYTES);
-        offsetBuffer.limit(simple.limit() - Long.BYTES);
-        this.offsets = offsetBuffer.slice().asLongBuffer();
-
-        // Cells
-        final ByteBuffer cellBuffer = simple.duplicate();
-        cellBuffer.limit(offsetBuffer.position());
-        this.cells = cellBuffer.slice();
     }
 
-    static void write(final Iterator<Cell> cells, final File to) throws IOException {
-        try (FileChannel fc = FileChannel.open(to.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+    static void write(final Iterator<Cell> cells, final File to) {
+        try (FileChannel fc = (FileChannel) Files.newByteChannel(to.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
             final List<Long> offsets = new ArrayList<>();
             long offset = 0;
             while (cells.hasNext()) {
@@ -91,6 +85,8 @@ public class FileTable implements Table {
 
             // Cells
             fc.write(Bytes.fromLong(offsets.size()));
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -151,6 +147,28 @@ public class FileTable implements Table {
         return left;
     }
 
+    private long readLong(final FileChannel fc, final long offset) {
+        final ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
+        try {
+            fc.read(buffer, offset);
+            return buffer.rewind().getLong();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return -1L;
+    }
+
+    private ByteBuffer readBuffer(final FileChannel fc, final long offset, final int size) {
+        final ByteBuffer buffer = ByteBuffer.allocate(size);
+        try {
+            fc.read(buffer, offset);
+            return buffer.rewind();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return buffer;
+    }
+
     @Override
     public long sizeInBytes() {
         return 0;
@@ -188,5 +206,15 @@ public class FileTable implements Table {
     @Override
     public void clear() {
         throw new UnsupportedOperationException("");
+    }
+
+    @Override
+    public Cell get(@NotNull final ByteBuffer key) {
+        final int position = position(key);
+        if (position < 0 || position >= rows) {
+            return null;
+        }
+        final Cell cell = cellAt(position);
+        return cell;
     }
 }

@@ -18,4 +18,6 @@ public interface Table {
     void remove(@NotNull ByteBuffer key) throws IOException;
 
     void clear();
+
+    Cell get(@NotNull ByteBuffer key) throws IOException;
 }

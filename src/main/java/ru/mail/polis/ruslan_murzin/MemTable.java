@@ -56,4 +56,12 @@ public class MemTable implements Table {
         sizeInBytes = 0;
         map.clear();
     }
+
+    @Override
+    public Cell get(@NotNull ByteBuffer key) throws IOException {
+        final Value value = map.get(key);
+        return value == null ?
+                null :
+                new Cell(key, value);
+    }
 }
