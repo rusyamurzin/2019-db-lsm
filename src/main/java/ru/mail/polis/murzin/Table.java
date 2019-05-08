@@ -1,4 +1,4 @@
-package ru.mail.polis.ruslan_murzin;
+package ru.mail.polis.murzin;
 
 import org.jetbrains.annotations.NotNull;
 import java.io.IOException;

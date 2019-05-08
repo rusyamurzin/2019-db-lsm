@@ -1,9 +1,10 @@
-package ru.mail.polis.ruslan_murzin;
+package ru.mail.polis.murzin;
 
 import java.nio.ByteBuffer;
 
 public final class Bytes {
-    public Bytes() {}
+    private Bytes() {
+    }
 
     static ByteBuffer fromInt(final int value) {
         final ByteBuffer result = ByteBuffer.allocate(Integer.BYTES);

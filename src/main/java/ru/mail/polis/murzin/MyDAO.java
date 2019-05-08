@@ -1,4 +1,4 @@
-package ru.mail.polis.ruslan_murzin;
+package ru.mail.polis.murzin;
 
 import com.google.common.collect.Iterators;
 
@@ -27,9 +27,8 @@ public class MyDAO implements DAO {
 
     private final long flushThreshold;
     private final File base;
-    private Table memTable = new MemTable();
+    private final Table memTable = new MemTable();
     private int generation;
-    private int countSSTables;
     private Cell minCell;
 
     public MyDAO(
@@ -39,15 +38,11 @@ public class MyDAO implements DAO {
         assert flushThreshold >= 0L;
         this.flushThreshold = flushThreshold;
         generation = 0;
-        countSSTables = 0;
 
         try (Stream<Path> files = Files.walk(base.toPath())) {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(BASE_NAME + SUFFIX))
-                    .forEach(p -> {
-                        countSSTables++;
-                        generation = Math.max(generation, getGenerationOf(p.getFileName().toString()));
-                    });
+                    .forEach(p -> generation = Math.max(generation, getGenerationOf(p.getFileName().toString())));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -55,18 +50,14 @@ public class MyDAO implements DAO {
 
     @NotNull
     @Override
-    public Iterator<Record> iterator(@NotNull ByteBuffer from) throws IOException {
+    public Iterator<Record> iterator(@NotNull final ByteBuffer from) throws IOException {
         final List<Iterator<Cell>> listIterators = new ArrayList<>();
         try (Stream<Path> files = Files.walk(base.toPath())) {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(BASE_NAME + SUFFIX))
                     .forEach(p -> {
-                        FileTable fileTable = new FileTable(p.toFile());
-                        try {
-                            listIterators.add(fileTable.iterator(from));
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
+                        final FileTable fileTable = new FileTable(p.toFile());
+                        addIteratorFrom(listIterators, fileTable, from);
                     });
         } catch (IOException e) {
             e.printStackTrace();
@@ -86,9 +77,17 @@ public class MyDAO implements DAO {
                 cell -> Record.of(cell.getKey(), cell.getValue().getData()));
     }
 
+    private void addIteratorFrom(final List<Iterator<Cell>> listIterators, final FileTable fileTable, final ByteBuffer from) {
+        try {
+            listIterators.add(fileTable.iterator(from));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
-    public void upsert(@NotNull ByteBuffer key, @NotNull ByteBuffer value) throws IOException {
-        memTable.upsert(key, value);
+    public void upsert(@NotNull final ByteBuffer key, @NotNull final ByteBuffer value) throws IOException {
+        memTable.upsert(key.duplicate(), value.duplicate());
         checkThreshold();
     }
 
@@ -103,7 +102,6 @@ public class MyDAO implements DAO {
         FileTable.write(memTable.iterator(ByteBuffer.allocate(0)), tmp);
         final File dest = new File(base, generation + BASE_NAME + SUFFIX);
         Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.ATOMIC_MOVE);
-        countSSTables++;
         generation++;
         memTable.clear();
     }
@@ -125,7 +123,7 @@ public class MyDAO implements DAO {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(BASE_NAME + SUFFIX))
                     .forEach(p -> {
-                        FileTable fileTable = new FileTable(p.toFile());
+                        final FileTable fileTable = new FileTable(p.toFile());
                         final Cell cell = fileTable.get(key);
                         if (cell != null) {
                             checkMinCell(cell);
@@ -141,14 +139,14 @@ public class MyDAO implements DAO {
         return minCell.getValue().getData();
     }
 
-    private void checkMinCell(Cell cell) {
+    private void checkMinCell(final Cell cell) {
         if (minCell == null || Cell.COMPARATOR.compare(minCell, cell) > 0) {
             minCell = cell;
         }
     }
 
     @Override
-    public void remove(@NotNull ByteBuffer key) throws IOException {
+    public void remove(@NotNull final ByteBuffer key) throws IOException {
         memTable.remove(key);
         checkThreshold();
     }
@@ -159,24 +157,26 @@ public class MyDAO implements DAO {
     }
 
     private int getGenerationOf(final String name) {
+        int result = -1;
         for (int i = 0; i < name.length(); i++) {
             if (!Character.isDigit(name.charAt(i))) {
                 if (i == 0) {
-                    return 0;
+                    result = 0;
                 }
                 else {
-                    long genLong = Long.parseLong(name.substring(0, i));
+                    final long genLong = Long.parseLong(name.substring(0, i));
                     if (genLong > Integer.MAX_VALUE) {
-                        return Integer.MAX_VALUE;
+                        result = Integer.MAX_VALUE;
                     } else if (genLong < Integer.MIN_VALUE) {
-                        return Integer.MIN_VALUE;
+                        result = Integer.MIN_VALUE;
                     }
                     else {
-                        return (int) genLong;
+                        result = (int) genLong;
                     }
                 }
+                break;
             }
         }
-        return -1;
+        return result;
     }
 }

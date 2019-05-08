@@ -21,7 +21,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.io.IOException;
 
-import ru.mail.polis.ruslan_murzin.MyDAO;
+import ru.mail.polis.murzin.MyDAO;
 
 /**
  * Custom {@link DAO} factory.
@@ -55,6 +55,6 @@ public final class DAOFactory {
             throw new IllegalArgumentException("Path is not a directory: " + data);
         }
 
-        return new MyDAO(data, MAX_HEAP / 16);
+        return new MyDAO(data, MAX_HEAP / 64);
     }
 }

@@ -1,5 +1,7 @@
-package ru.mail.polis.ruslan_murzin;
+package ru.mail.polis.murzin;
+
 import java.nio.ByteBuffer;
+
 import java.util.Comparator;
 
 public class Cell {
@@ -9,7 +11,7 @@ public class Cell {
     private final ByteBuffer key;
     private final Value value;
 
-    public Cell(ByteBuffer key, Value value) {
+    public Cell(final ByteBuffer key, final Value value) {
         this.key = key;
         this.value = value;
     }

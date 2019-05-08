@@ -1,4 +1,4 @@
-package ru.mail.polis.ruslan_murzin;
+package ru.mail.polis.murzin;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -10,8 +10,13 @@ public final class Value implements Comparable<Value> {
     private static long lastTime;
     private static long additionalTime;
 
+    /**
+     * Value which hold data with timestamp.
+     * @param ts timestamp
+     * @param data stored data
+     */
     public Value(final long ts, final ByteBuffer data) {
-        assert (ts >= 0);
+        assert ts >= 0;
         this.ts = ts;
         this.data = data;
     }
@@ -28,6 +33,10 @@ public final class Value implements Comparable<Value> {
         return data == null;
     }
 
+    /**
+     * Get data as buffer.
+     * @return data as byte buffer
+     */
     public ByteBuffer getData() {
         if (data == null) {
             throw new IllegalArgumentException("");
@@ -36,7 +45,7 @@ public final class Value implements Comparable<Value> {
     }
 
     @Override
-    public int compareTo(@NotNull Value o) {
+    public int compareTo(@NotNull final Value o) {
         return -Long.compare(ts, o.ts);
     }
 
@@ -44,6 +53,10 @@ public final class Value implements Comparable<Value> {
         return ts;
     }
 
+    /**
+     * Get current time in nanoseconds.
+     * @return current time in nanoseconds
+     */
     public static long getCurrentTimeNanos() {
         final long currentTime = System.currentTimeMillis();
         if (currentTime != lastTime) {

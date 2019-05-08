@@ -1,4 +1,4 @@
-package ru.mail.polis.ruslan_murzin;
+package ru.mail.polis.murzin;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -18,8 +17,13 @@ public class FileTable implements Table {
     private LongBuffer offsets;
     private ByteBuffer cells;
 
+    /**
+    * Sorted String Table, which use FileChannel for read and write operations.
+     *
+     * @param file of this table
+     */
     public FileTable(final File file) {
-        try (FileChannel fc = (FileChannel) Files.newByteChannel(file.toPath(), StandardOpenOption.READ)) {
+        try (FileChannel fc = FileChannel.open(file.toPath(), StandardOpenOption.READ)) {
             final long fileSize = file.length();
             assert fileSize <= Integer.MAX_VALUE;
 
@@ -40,14 +44,14 @@ public class FileTable implements Table {
         }
     }
 
-    static void write(final Iterator<Cell> cells, final File to) {
-        try (FileChannel fc = (FileChannel) Files.newByteChannel(to.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
-            final List<Long> offsets = new ArrayList<>();
+    static void write(final Iterator<Cell> cellsIterator, final File to) {
+        try (FileChannel fc = FileChannel.open(to.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+            final List<Long> listOffsets = new ArrayList<>();
             long offset = 0;
-            while (cells.hasNext()) {
-                offsets.add(offset);
+            while (cellsIterator.hasNext()) {
+                listOffsets.add(offset);
 
-                final Cell cell = cells.next();
+                final Cell cell = cellsIterator.next();
 
                 // Key
                 final ByteBuffer key = cell.getKey();
@@ -61,11 +65,11 @@ public class FileTable implements Table {
                 final Value value = cell.getValue();
 
                 // Timestamp
-                if (value.isRemoved()) {
-                    fc.write(Bytes.fromLong(-cell.getValue().getTimeStamp()));
-                } else {
-                    fc.write(Bytes.fromLong(cell.getValue().getTimeStamp()));
-                }
+                final long timestamp = cell.getValue().getTimeStamp();
+                fc.write(Bytes.fromLong(value.isRemoved()
+                        ? -timestamp
+                        : timestamp));
+
                 offset += Long.BYTES;
 
                 // Value
@@ -79,12 +83,12 @@ public class FileTable implements Table {
                 }
             }
             // Offsets
-            for (final Long anOffset : offsets) {
+            for (final Long anOffset : listOffsets) {
                 fc.write(Bytes.fromLong(anOffset));
             }
 
             // Cells
-            fc.write(Bytes.fromLong(offsets.size()));
+            fc.write(Bytes.fromLong(listOffsets.size()));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -134,12 +138,12 @@ public class FileTable implements Table {
         int left = 0;
         int right = rows - 1;
         while (left <= right) {
-            final int mid = left + (right - left) / 2;
+            final int mid = left + ((right - left) >> 1);
             final int cmp = from.compareTo(keyAt(mid));
             if (cmp < 0) {
                 right = mid - 1;
             } else if (cmp > 0) {
-                left = mid - 1;
+                left = mid + 1;
             } else {
                 return mid;
             }
@@ -176,7 +180,7 @@ public class FileTable implements Table {
 
     @NotNull
     @Override
-    public Iterator<Cell> iterator(@NotNull ByteBuffer from) throws IOException {
+    public Iterator<Cell> iterator(@NotNull final ByteBuffer from) throws IOException {
         return new Iterator<Cell>() {
             int next = position(from);
 
@@ -194,12 +198,12 @@ public class FileTable implements Table {
     }
 
     @Override
-    public void upsert(@NotNull ByteBuffer key, @NotNull ByteBuffer value) throws IOException {
+    public void upsert(@NotNull final ByteBuffer key, @NotNull final ByteBuffer value) throws IOException {
         throw new UnsupportedOperationException("");
     }
 
     @Override
-    public void remove(@NotNull ByteBuffer key) throws IOException {
+    public void remove(@NotNull final ByteBuffer key) throws IOException {
         throw new UnsupportedOperationException("");
     }
 
@@ -214,7 +218,6 @@ public class FileTable implements Table {
         if (position < 0 || position >= rows) {
             return null;
         }
-        final Cell cell = cellAt(position);
-        return cell;
+        return cellAt(position);
     }
 }
