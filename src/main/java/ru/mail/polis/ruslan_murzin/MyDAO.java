@@ -15,12 +15,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 public class MyDAO implements DAO {
@@ -28,11 +25,12 @@ public class MyDAO implements DAO {
     public static final String SUFFIX = ".dat";
     public static final String TEMP = ".tmp";
 
-    private Table memTable = new MemTable();
     private final long flushThreshold;
     private final File base;
+    private Table memTable = new MemTable();
     private int generation;
-    private List<FileTable> fileTables;
+    private int countSSTables;
+    private Cell minCell;
 
     public MyDAO(
             final File base,
@@ -40,14 +38,14 @@ public class MyDAO implements DAO {
         this.base = base;
         assert flushThreshold >= 0L;
         this.flushThreshold = flushThreshold;
-        fileTables = new ArrayList<>();
         generation = 0;
+        countSSTables = 0;
 
         try (Stream<Path> files = Files.walk(base.toPath())) {
             files.filter(Files::isRegularFile)
-                    .filter(p -> p.getFileName().toString().endsWith(SUFFIX))
+                    .filter(p -> p.getFileName().toString().endsWith(BASE_NAME + SUFFIX))
                     .forEach(p -> {
-                        fileTables.add(new FileTable(p.toFile()));
+                        countSSTables++;
                         generation = Math.max(generation, getGenerationOf(p.getFileName().toString()));
                     });
         } catch (IOException e) {
@@ -59,9 +57,21 @@ public class MyDAO implements DAO {
     @Override
     public Iterator<Record> iterator(@NotNull ByteBuffer from) throws IOException {
         final List<Iterator<Cell>> listIterators = new ArrayList<>();
-        for(FileTable fileTable : fileTables) {
-            listIterators.add(fileTable.iterator(from));
+        try (Stream<Path> files = Files.walk(base.toPath())) {
+            files.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(BASE_NAME + SUFFIX))
+                    .forEach(p -> {
+                        FileTable fileTable = new FileTable(p.toFile());
+                        try {
+                            listIterators.add(fileTable.iterator(from));
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    });
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+
         final Iterator<Cell> memIterator = memTable.iterator(from);
         listIterators.add(memIterator);
         final Iterator<Cell> cells = Iters.collapseEquals(Iterators.mergeSorted(listIterators, Cell.COMPARATOR));
@@ -93,7 +103,7 @@ public class MyDAO implements DAO {
         FileTable.write(memTable.iterator(ByteBuffer.allocate(0)), tmp);
         final File dest = new File(base, generation + BASE_NAME + SUFFIX);
         Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.ATOMIC_MOVE);
-        fileTables.add(new FileTable(dest));
+        countSSTables++;
         generation++;
         memTable.clear();
     }
@@ -110,38 +120,31 @@ public class MyDAO implements DAO {
             return memCell.getValue().getData();
         }
 
-        final ConcurrentLinkedQueue<Cell> cells = new ConcurrentLinkedQueue<>();
-        final AtomicInteger counter = new AtomicInteger(0);
-        fileTables.forEach(table -> new Thread(() -> {
-            try {
-                final Cell cell = table.get(key);
-
-                if (cell != null) {
-                    cells.add(cell);
-                }
-            } finally {
-                counter.incrementAndGet();
-            }
-        }).start());
-
-        while (counter.get() < fileTables.size()) {
-            try {
-                Thread.sleep(10);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+        minCell = null;
+        try (Stream<Path> files = Files.walk(base.toPath())) {
+            files.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(BASE_NAME + SUFFIX))
+                    .forEach(p -> {
+                        FileTable fileTable = new FileTable(p.toFile());
+                        final Cell cell = fileTable.get(key);
+                        if (cell != null) {
+                            checkMinCell(cell);
+                        }
+                    });
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
-        if (cells.size() == 0) {
+        if (minCell == null || minCell.getValue().isRemoved()) {
             throw new NoSuchElementException("");
         }
+        return minCell.getValue().getData();
+    }
 
-        final Cell cell = Collections.min(cells, Cell.COMPARATOR);
-        if (cell == null || cell.getValue().isRemoved()) {
-            throw new NoSuchElementException("");
+    private void checkMinCell(Cell cell) {
+        if (minCell == null || Cell.COMPARATOR.compare(minCell, cell) > 0) {
+            minCell = cell;
         }
-        final Record record = Record.of(cell.getKey(), cell.getValue().getData());
-        return record.getValue();
     }
 
     @Override

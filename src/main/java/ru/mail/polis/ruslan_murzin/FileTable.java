@@ -30,7 +30,7 @@ public class FileTable implements Table {
             this.rows = (int) rowsValue;
 
             // Offsets
-            offset -= Long.BYTES * rows;
+            offset -= (long) Long.BYTES * rows;
             this.offsets = readBuffer(fc, offset, Long.BYTES * rows).asLongBuffer();
 
             // Cells
