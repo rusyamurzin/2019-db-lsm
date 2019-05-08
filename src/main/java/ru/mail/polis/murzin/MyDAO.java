@@ -31,9 +31,14 @@ public class MyDAO implements DAO {
     private int generation;
     private Cell minCell;
 
+    /**
+     * The Log-Structured Merge-Tree implementation DAO.
+     * @param base path to working directory
+     * @param flushThreshold threshold value of flush
+     */
     public MyDAO(
             final File base,
-            final long flushThreshold) throws IOException{
+            final long flushThreshold) {
         this.base = base;
         assert flushThreshold >= 0L;
         this.flushThreshold = flushThreshold;
@@ -77,7 +82,8 @@ public class MyDAO implements DAO {
                 cell -> Record.of(cell.getKey(), cell.getValue().getData()));
     }
 
-    private void addIteratorFrom(final List<Iterator<Cell>> listIterators, final FileTable fileTable, final ByteBuffer from) {
+    private void addIteratorFrom(final List<Iterator<Cell>> listIterators,
+            final FileTable fileTable, final ByteBuffer from) {
         try {
             listIterators.add(fileTable.iterator(from));
         } catch (IOException e) {
@@ -133,7 +139,7 @@ public class MyDAO implements DAO {
             e.printStackTrace();
         }
 
-        if (minCell == null || minCell.getValue().isRemoved()) {
+        if (getMinCell() == null || getMinCell().getValue().isRemoved()) {
             throw new NoSuchElementException("");
         }
         return minCell.getValue().getData();
@@ -143,6 +149,10 @@ public class MyDAO implements DAO {
         if (minCell == null || Cell.COMPARATOR.compare(minCell, cell) > 0) {
             minCell = cell;
         }
+    }
+
+    public Cell getMinCell() {
+        return minCell;
     }
 
     @Override
