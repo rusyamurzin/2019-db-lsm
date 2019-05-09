@@ -11,11 +11,12 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 public class FileTable implements Table {
     private int rows;
     private LongBuffer offsets;
-    private ByteBuffer cells;
+    private final File file;
 
     /**
     * Sorted String Table, which use FileChannel for read and write operations.
@@ -23,6 +24,7 @@ public class FileTable implements Table {
      * @param file of this table
      */
     public FileTable(final File file) {
+        this.file = file;
         try (FileChannel fc = FileChannel.open(file.toPath(), StandardOpenOption.READ)) {
             final long fileSize = file.length();
             assert fileSize <= Integer.MAX_VALUE;
@@ -36,9 +38,6 @@ public class FileTable implements Table {
             // Offsets
             offset -= (long) Long.BYTES * rows;
             this.offsets = readBuffer(fc, offset, Long.BYTES * rows).asLongBuffer();
-
-            // Cells
-            this.cells = readBuffer(fc, 0, (int) offset);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -93,44 +92,60 @@ public class FileTable implements Table {
         }
     }
 
+    private FileChannel openReadFileChannel() {
+        try {
+            return FileChannel.open(file.toPath(), StandardOpenOption.READ);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
     private ByteBuffer keyAt(final int i) {
         assert 0 <= i && i < rows;
-        final long offset = offsets.get(i);
-        assert offset <= Integer.MAX_VALUE;
-        final int keySize = cells.getInt((int) offset);
-        final ByteBuffer key = cells.duplicate();
-        key.position((int) (offset + Integer.BYTES));
-        key.limit(key.position() + keySize);
-        return key.slice();
+        try (FileChannel fc = openReadFileChannel()) {
+            assert fc != null;
+            final long offset = offsets.get(i);
+            assert offset <= Integer.MAX_VALUE;
+
+            final int keySize = readInt(fc, (int) offset);
+
+            return readBuffer(fc, offset + Integer.BYTES, keySize);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     private Cell cellAt(final int i) {
         assert 0 <= i && i < rows;
-        long offset = offsets.get(i);
-        assert offset <= Integer.MAX_VALUE;
+        try (FileChannel fc = openReadFileChannel()) {
+            assert fc != null;
+            long offset = offsets.get(i);
+            assert offset <= Integer.MAX_VALUE;
 
-        // Key
-        final int keySize = cells.getInt((int) offset);
-        offset += Integer.BYTES;
-        final ByteBuffer key = cells.duplicate();
-        key.position((int) (offset));
-        key.limit(key.position() + keySize);
-        offset += keySize;
-
-        // Timestamp
-        final long timeStamp = cells.getLong((int) offset);
-        offset += Long.BYTES;
-
-        if (timeStamp < 0) {
-            return new Cell(key.slice(), new Value(-timeStamp, null));
-        } else {
-            final int valueSize = cells.getInt((int) offset);
+            // Key
+            final int keySize = readInt(fc, (int) offset);
             offset += Integer.BYTES;
-            final ByteBuffer value = cells.duplicate();
-            value.position((int) offset);
-            value.limit(value.position() + valueSize);
-            return new Cell(key.slice(), new Value(timeStamp, value.slice()));
+            final ByteBuffer key = readBuffer(fc, offset, keySize);
+            offset += keySize;
+
+            // Timestamp
+            final long timeStamp = readLong(fc, (int) offset);
+            offset += Long.BYTES;
+
+            if (timeStamp < 0) {
+                return new Cell(key.slice(), new Value(-timeStamp, null));
+            } else {
+                final int valueSize = readInt(fc, (int) offset);
+                offset += Integer.BYTES;
+                final ByteBuffer value = readBuffer(fc, offset, valueSize);
+                return new Cell(key, new Value(timeStamp, value));
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+        return null;
     }
 
     private int position(final ByteBuffer from) {
@@ -159,6 +174,17 @@ public class FileTable implements Table {
             e.printStackTrace();
         }
         return -1L;
+    }
+
+    private int readInt(final FileChannel fc, final long offset) {
+        final ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
+        try {
+            fc.read(buffer, offset);
+            return buffer.rewind().getInt();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return -1;
     }
 
     private ByteBuffer readBuffer(final FileChannel fc, final long offset, final int size) {
@@ -190,7 +216,9 @@ public class FileTable implements Table {
 
             @Override
             public Cell next() {
-                assert hasNext();
+                if (!hasNext()) {
+                    throw new NoSuchElementException("FileTable iterator has not next element");
+                }
                 return cellAt(next++);
             }
         };
