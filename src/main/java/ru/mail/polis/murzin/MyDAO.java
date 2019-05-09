@@ -59,6 +59,12 @@ public class MyDAO implements DAO {
         }
     }
 
+    /**
+     * Iterator for only alive cells.
+     * @param from value of key of started position iterator
+     * @return Iterator with alive cells
+     * @throws IOException if memTable.iterator(from) is failed
+     */
     public Iterator<Cell> iteratorAliveCells(@NotNull final ByteBuffer from) throws IOException {
         final List<Iterator<Cell>> listIterators = new ArrayList<>();
         try (Stream<Path> files = Files.walk(base.toPath())) {
@@ -74,13 +80,17 @@ public class MyDAO implements DAO {
 
         final Iterator<Cell> memIterator = memTable.iterator(from);
         listIterators.add(memIterator);
-        final Iterator<Cell> cells = Iters.collapseEquals(Iterators.mergeSorted(listIterators, Cell.COMPARATOR), Cell::getKey);
+        final Iterator<Cell> cells = Iters.collapseEquals(
+                Iterators.mergeSorted(listIterators, Cell.COMPARATOR),
+                Cell::getKey
+        );
 
         return Iterators.filter(
                         cells,
                         cell -> !cell.getValue().isRemoved()
                 );
     }
+
     @NotNull
     @Override
     public Iterator<Record> iterator(@NotNull final ByteBuffer from) throws IOException {
@@ -119,7 +129,7 @@ public class MyDAO implements DAO {
         countTables++;
     }
 
-    private void flush(Iterator<Cell> cells) throws IOException {
+    private void flush(final Iterator<Cell> cells) throws IOException {
         final File tmp = new File(base, generation + BASE_NAME + TEMP);
         FileTable.write(cells, tmp);
         final File dest = new File(base, generation + BASE_NAME + SUFFIX);
