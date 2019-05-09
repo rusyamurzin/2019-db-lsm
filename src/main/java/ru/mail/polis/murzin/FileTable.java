@@ -65,17 +65,16 @@ public class FileTable implements Table {
                 final Value value = cell.getValue();
 
                 // Timestamp
-                final long timestamp = cell.getValue().getTimeStamp();
+                final long timeStamp = cell.getValue().getTimeStamp();
                 fc.write(Bytes.fromLong(value.isRemoved()
-                        ? -timestamp
-                        : timestamp));
-
+                        ? -timeStamp
+                        : timeStamp));
                 offset += Long.BYTES;
 
                 // Value
                 if (!value.isRemoved()) {
                     final ByteBuffer valueData = value.getData();
-                    final int valueSize = value.getData().remaining();
+                    final int valueSize = valueData.remaining();
                     fc.write(Bytes.fromInt(valueSize));
                     offset += Integer.BYTES;
                     fc.write(valueData);
@@ -114,7 +113,7 @@ public class FileTable implements Table {
         final int keySize = cells.getInt((int) offset);
         offset += Integer.BYTES;
         final ByteBuffer key = cells.duplicate();
-        key.position((int) (offset + Integer.BYTES));
+        key.position((int) (offset));
         key.limit(key.position() + keySize);
         offset += keySize;
 
@@ -218,6 +217,10 @@ public class FileTable implements Table {
         if (position < 0 || position >= rows) {
             return null;
         }
-        return cellAt(position);
+        final Cell cell = cellAt(position);
+        if (!cell.getKey().equals(key)) {
+            return null;
+        }
+        return cell;
     }
 }

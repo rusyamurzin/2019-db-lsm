@@ -140,13 +140,14 @@ public class MyDAO implements DAO {
         }
 
         if (getMinCell() == null || getMinCell().getValue().isRemoved()) {
-            throw new NoSuchElementException("");
+            throw new NoSuchElementException("minCell is " + minCell);
         }
-        return minCell.getValue().getData();
+        final Record record = Record.of(minCell.getKey(), minCell.getValue().getData());
+        return record.getValue();
     }
 
     private void checkMinCell(final Cell cell) {
-        if (minCell == null || Cell.COMPARATOR.compare(minCell, cell) > 0) {
+        if (minCell == null || Cell.COMPARATOR.compare(cell, minCell) < 0) {
             minCell = cell;
         }
     }
@@ -157,7 +158,7 @@ public class MyDAO implements DAO {
 
     @Override
     public void remove(@NotNull final ByteBuffer key) throws IOException {
-        memTable.remove(key);
+        memTable.remove(key.duplicate());
         checkThreshold();
     }
 

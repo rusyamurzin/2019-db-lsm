@@ -29,7 +29,7 @@ public class MemTable implements Table {
 
     @Override
     public void upsert(@NotNull final ByteBuffer key, @NotNull final ByteBuffer value) throws IOException {
-        final Value previous = map.put(key, Value.of(value));
+        final Value previous = map.put(key.duplicate(), Value.of(value.duplicate()));
         if (previous == null) {
             sizeInBytes += key.remaining() + value.remaining() + Long.BYTES;
         } else if (previous.isRemoved()) {
@@ -41,7 +41,7 @@ public class MemTable implements Table {
 
     @Override
     public void remove(@NotNull final ByteBuffer key) throws IOException {
-        final Value previous = map.put(key, Value.tombstone());
+        final Value previous = map.put(key.duplicate(), Value.tombstone());
         if (previous == null) {
             sizeInBytes += key.remaining() + Long.BYTES;
         } else if (!previous.isRemoved()) {
@@ -60,6 +60,6 @@ public class MemTable implements Table {
         final Value value = map.get(key);
         return value == null
                 ? null
-                : new Cell(key, value);
+                : new Cell(key.duplicate(), value);
     }
 }
