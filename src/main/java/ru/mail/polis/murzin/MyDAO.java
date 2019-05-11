@@ -130,11 +130,11 @@ public class MyDAO implements DAO {
     }
 
     private void flush(final Iterator<Cell> cells) throws IOException {
+        generation++;
         final File tmp = new File(base, generation + BASE_NAME + TEMP);
         FileTable.write(cells, tmp);
         final File dest = new File(base, generation + BASE_NAME + SUFFIX);
         Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.ATOMIC_MOVE);
-        generation++;
         memTable.clear();
     }
 
@@ -146,7 +146,7 @@ public class MyDAO implements DAO {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(BASE_NAME + SUFFIX))
                     .forEach(p -> {
-                        if (getGenerationOf(p.getFileName().toString()) != generation - 1) {
+                        if (getGenerationOf(p.getFileName().toString()) != generation) {
                             deleteFile(p);
                         }
                     });
@@ -203,7 +203,7 @@ public class MyDAO implements DAO {
         }
     }
 
-    Cell getMinCell() {
+    private Cell getMinCell() {
         return minCell;
     }
 
@@ -215,7 +215,9 @@ public class MyDAO implements DAO {
 
     @Override
     public void close() throws IOException {
-        flush();
+        if (memTable.sizeInBytes() != 0) {
+            flush();
+        }
     }
 
     private int getGenerationOf(final String name) {
