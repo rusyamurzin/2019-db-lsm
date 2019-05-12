@@ -20,16 +20,16 @@ import java.util.List;
 import java.util.stream.Stream;
 
 public class MyDAO implements DAO {
-    private static final String BASE_NAME = "SSTable";
+    private static final String BASE_NAME = "_SSTable";
     private static final String SUFFIX = ".dat";
     private static final String TEMP = ".tmp";
     private static final int MAX_TABLES = 8;
 
     private final long flushThreshold;
     private final File base;
-    private final Table memTable = new MemTable();
     private final ByteBuffer emptyBuffer = ByteBuffer.allocate(0);
-    private final List<FileTable> fileTables;
+    private MemTable memTable = new MemTable();
+    private List<FileTable> fileTables;
     private int generation;
     private boolean errorOccurred;
 
@@ -125,7 +125,7 @@ public class MyDAO implements DAO {
         FileTable.write(memTable.iterator(emptyBuffer), tmp);
         final File dest = new File(base, generation + BASE_NAME + SUFFIX);
         Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.ATOMIC_MOVE);
-        memTable.clear();
+        memTable = new MemTable();
         fileTables.add(new FileTable(dest));
     }
 
@@ -137,12 +137,12 @@ public class MyDAO implements DAO {
         FileTable.write(cellIterator, tmp);
         final File dest = new File(base, generation + BASE_NAME + SUFFIX);
         Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.ATOMIC_MOVE);
-        memTable.clear();
+        memTable = new MemTable();
 
         for (final FileTable fileTable : fileTables) {
             fileTable.close();
         }
-        fileTables.clear();
+        fileTables = new ArrayList<>();
 
         try (Stream<Path> files = Files.walk(base.toPath())) {
             files.filter(Files::isRegularFile)
@@ -183,29 +183,18 @@ public class MyDAO implements DAO {
         for (final FileTable fileTable : fileTables) {
             fileTable.close();
         }
-        fileTables.clear();
     }
 
     private int getGenerationOf(final String name) {
         int result = -1;
-        for (int i = 0; i < name.length(); i++) {
-            if (!Character.isDigit(name.charAt(i))) {
-                if (i == 0) {
-                    result = 0;
-                }
-                else {
-                    final long genLong = Long.parseLong(name.substring(0, i));
-                    if (genLong > Integer.MAX_VALUE) {
-                        result = Integer.MAX_VALUE;
-                    } else if (genLong < Integer.MIN_VALUE) {
-                        result = Integer.MIN_VALUE;
-                    }
-                    else {
-                        result = (int) genLong;
-                    }
-                }
-                break;
-            }
+        final long genLong = Long.parseLong(name.split("_")[0]);
+        if (genLong > Integer.MAX_VALUE) {
+            result = Integer.MAX_VALUE;
+        } else if (genLong < Integer.MIN_VALUE) {
+            result = Integer.MIN_VALUE;
+        }
+        else {
+            result = (int) genLong;
         }
         return result;
     }

@@ -163,11 +163,6 @@ public class FileTable implements Table, Closeable {
         return buffer.rewind();
     }
 
-    @Override
-    public long sizeInBytes() {
-        throw new UnsupportedOperationException("");
-    }
-
     @NotNull
     @Override
     public Iterator<Cell> iterator(@NotNull final ByteBuffer from) throws IOException {
@@ -192,21 +187,6 @@ public class FileTable implements Table, Closeable {
                 throw new NoSuchElementException("Next cell not found");
             }
         };
-    }
-
-    @Override
-    public void upsert(@NotNull final ByteBuffer key, @NotNull final ByteBuffer value) throws IOException {
-        throw new UnsupportedOperationException("");
-    }
-
-    @Override
-    public void remove(@NotNull final ByteBuffer key) throws IOException {
-        throw new UnsupportedOperationException("");
-    }
-
-    @Override
-    public void clear() {
-        throw new UnsupportedOperationException("");
     }
 
     @Override

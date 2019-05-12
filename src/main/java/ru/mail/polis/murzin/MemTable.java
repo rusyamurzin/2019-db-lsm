@@ -14,8 +14,7 @@ public class MemTable implements Table {
     private final SortedMap<ByteBuffer, Value> map = new TreeMap<>();
     private long sizeInBytes;
 
-    @Override
-    public long sizeInBytes() {
+    long sizeInBytes() {
         return sizeInBytes;
     }
 
@@ -27,8 +26,7 @@ public class MemTable implements Table {
                 e -> new Cell(e.getKey(), e.getValue()));
     }
 
-    @Override
-    public void upsert(@NotNull final ByteBuffer key, @NotNull final ByteBuffer value) throws IOException {
+    void upsert(@NotNull final ByteBuffer key, @NotNull final ByteBuffer value) throws IOException {
         final Value previous = map.put(key.duplicate(), Value.of(value.duplicate()));
         if (previous == null) {
             sizeInBytes += key.remaining() + value.remaining() + Long.BYTES;
@@ -39,20 +37,13 @@ public class MemTable implements Table {
         }
     }
 
-    @Override
-    public void remove(@NotNull final ByteBuffer key) throws IOException {
+    void remove(@NotNull final ByteBuffer key) throws IOException {
         final Value previous = map.put(key.duplicate(), Value.tombstone());
         if (previous == null) {
             sizeInBytes += key.remaining() + Long.BYTES;
         } else if (!previous.isRemoved()) {
             sizeInBytes -= previous.getData().remaining();
         }
-    }
-
-    @Override
-    public void clear() {
-        sizeInBytes = 0;
-        map.clear();
     }
 
     @Override
