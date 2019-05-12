@@ -41,7 +41,11 @@ public class FileTable implements Table, Closeable {
     }
 
     static void write(final Iterator<Cell> cellsIterator, final File to) throws IOException {
-        try (final FileChannel fc = FileChannel.open(to.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+        try (FileChannel fc = FileChannel.open(
+                to.toPath(),
+                StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE
+        )) {
             final List<Long> listOffsets = new ArrayList<>();
             long offset = 0;
             while (cellsIterator.hasNext()) {
