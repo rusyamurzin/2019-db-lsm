@@ -188,8 +188,8 @@ public class FileTable implements Table, Closeable {
                     return cellAt(next++);
                 } catch (IOException e) {
                     e.printStackTrace();
-                    throw new NoSuchElementException("Next cell not found");
                 }
+                throw new NoSuchElementException("Next cell not found");
             }
         };
     }
