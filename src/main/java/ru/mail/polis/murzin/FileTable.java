@@ -179,12 +179,14 @@ public class FileTable implements Table, Closeable {
                 if (!hasNext()) {
                     throw new NoSuchElementException("FileTable iterator has not next element");
                 }
+                RuntimeException runtimeException;
                 try {
                     return cellAt(next++);
                 } catch (IOException e) {
                     e.printStackTrace();
+                    runtimeException = new RuntimeException("Next cell not found", e);
                 }
-                throw new NoSuchElementException("Next cell not found");
+                throw runtimeException;
             }
         };
     }
