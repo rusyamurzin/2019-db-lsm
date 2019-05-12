@@ -29,9 +29,9 @@ public class MyDAO implements DAO {
     private final File base;
     private final Table memTable = new MemTable();
     private final ByteBuffer emptyBuffer = ByteBuffer.allocate(0);
-    private final ArrayList<FileTable> fileTables;
+    private final List<FileTable> fileTables;
     private int generation;
-    private boolean errorOccurred = false;
+    private boolean errorOccurred;
 
     /**
      * The Log-Structured Merge-Tree implementation DAO.
@@ -52,7 +52,7 @@ public class MyDAO implements DAO {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(BASE_NAME + SUFFIX))
                     .forEach(p -> {
-                        addFileTable(fileTables, p.toFile());
+                        addFileTable(p.toFile());
                         generation = Math.max(generation, getGenerationOf(p.getFileName().toString()));
                     });
         }
@@ -62,13 +62,14 @@ public class MyDAO implements DAO {
         }
     }
 
-    private void addFileTable(final ArrayList<FileTable> ft, final File file) {
+    private void addFileTable(final File file) {
         try {
-            ft.add(new FileTable(file));
+            fileTables.add(new FileTable(file));
         } catch (IOException e) {
             errorOccurred = true;
         }
     }
+
     /**
      * Iterator for only alive cells.
      * @param from value of key of started position iterator
@@ -77,7 +78,7 @@ public class MyDAO implements DAO {
      */
     private Iterator<Cell> iteratorAliveCells(@NotNull final ByteBuffer from) throws IOException {
         final List<Iterator<Cell>> listIterators = new ArrayList<>();
-        for (FileTable fileTable : fileTables) {
+        for (final FileTable fileTable : fileTables) {
             listIterators.add(fileTable.iterator(from));
         }
 
@@ -138,7 +139,7 @@ public class MyDAO implements DAO {
         Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.ATOMIC_MOVE);
         memTable.clear();
 
-        for (FileTable fileTable : fileTables) {
+        for (final FileTable fileTable : fileTables) {
             fileTable.close();
         }
         fileTables.clear();
@@ -179,7 +180,7 @@ public class MyDAO implements DAO {
         if (memTable.sizeInBytes() != 0) {
             flush();
         }
-        for (FileTable fileTable : fileTables) {
+        for (final FileTable fileTable : fileTables) {
             fileTable.close();
         }
         fileTables.clear();

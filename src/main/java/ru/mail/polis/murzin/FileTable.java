@@ -15,8 +15,8 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 public class FileTable implements Table, Closeable {
-    private int rows;
-    private LongBuffer offsets;
+    private final int rows;
+    private final LongBuffer offsets;
     private final FileChannel fileChannel;
 
     /**
@@ -41,50 +41,50 @@ public class FileTable implements Table, Closeable {
     }
 
     static void write(final Iterator<Cell> cellsIterator, final File to) throws IOException {
-        FileChannel fc = FileChannel.open(to.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-        final List<Long> listOffsets = new ArrayList<>();
-        long offset = 0;
-        while (cellsIterator.hasNext()) {
-            listOffsets.add(offset);
+        try (final FileChannel fc = FileChannel.open(to.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+            final List<Long> listOffsets = new ArrayList<>();
+            long offset = 0;
+            while (cellsIterator.hasNext()) {
+                listOffsets.add(offset);
 
-            final Cell cell = cellsIterator.next();
+                final Cell cell = cellsIterator.next();
 
-            // Key
-            final ByteBuffer key = cell.getKey();
-            final int keySize = cell.getKey().remaining();
-            fc.write(Bytes.fromInt(keySize));
-            offset += Integer.BYTES;
-            fc.write(key);
-            offset += keySize;
-
-            // Value
-            final Value value = cell.getValue();
-
-            // Timestamp
-            final long timeStamp = cell.getValue().getTimeStamp();
-            fc.write(Bytes.fromLong(value.isRemoved()
-                    ? -timeStamp
-                    : timeStamp));
-            offset += Long.BYTES;
-
-            // Value
-            if (!value.isRemoved()) {
-                final ByteBuffer valueData = value.getData();
-                final int valueSize = valueData.remaining();
-                fc.write(Bytes.fromInt(valueSize));
+                // Key
+                final ByteBuffer key = cell.getKey();
+                final int keySize = cell.getKey().remaining();
+                fc.write(Bytes.fromInt(keySize));
                 offset += Integer.BYTES;
-                fc.write(valueData);
-                offset += valueSize;
-            }
-        }
-        // Offsets
-        for (final Long anOffset : listOffsets) {
-            fc.write(Bytes.fromLong(anOffset));
-        }
+                fc.write(key);
+                offset += keySize;
 
-        // Cells
-        fc.write(Bytes.fromLong(listOffsets.size()));
-        fc.close();
+                // Value
+                final Value value = cell.getValue();
+
+                // Timestamp
+                final long timeStamp = cell.getValue().getTimeStamp();
+                fc.write(Bytes.fromLong(value.isRemoved()
+                        ? -timeStamp
+                        : timeStamp));
+                offset += Long.BYTES;
+
+                // Value
+                if (!value.isRemoved()) {
+                    final ByteBuffer valueData = value.getData();
+                    final int valueSize = valueData.remaining();
+                    fc.write(Bytes.fromInt(valueSize));
+                    offset += Integer.BYTES;
+                    fc.write(valueData);
+                    offset += valueSize;
+                }
+            }
+            // Offsets
+            for (final Long anOffset : listOffsets) {
+                fc.write(Bytes.fromLong(anOffset));
+            }
+
+            // Cells
+            fc.write(Bytes.fromLong(listOffsets.size()));
+        }
     }
 
     private ByteBuffer keyAt(final int i) throws IOException {
@@ -183,6 +183,7 @@ public class FileTable implements Table, Closeable {
                 try {
                     return cellAt(next++);
                 } catch (IOException e) {
+                    e.printStackTrace();
                     throw new NoSuchElementException("Next cell not found");
                 }
             }
