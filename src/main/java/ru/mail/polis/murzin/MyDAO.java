@@ -31,7 +31,6 @@ public class MyDAO implements DAO {
     private MemTable memTable = new MemTable();
     private List<FileTable> fileTables;
     private int generation;
-    private boolean errorOccurred;
 
     /**
      * The Log-Structured Merge-Tree implementation DAO.
@@ -47,26 +46,27 @@ public class MyDAO implements DAO {
         this.flushThreshold = flushThreshold;
         this.generation = 0;
         this.fileTables = new ArrayList<>();
+        final List<Path> errorsCreateSSTable = new ArrayList<>();
 
         try (Stream<Path> files = Files.walk(base.toPath())) {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(BASE_NAME + SUFFIX))
                     .forEach(p -> {
-                        addFileTable(p.toFile());
+                        addFileTable(errorsCreateSSTable, p);
                         generation = Math.max(generation, getGenerationOf(p.getFileName().toString()));
                     });
         }
 
-        if (errorOccurred) {
-            throw new IOException("can`t create FileTable");
+        if (!errorsCreateSSTable.isEmpty()) {
+            throw new IOException("can`t create FileTable with path : " + errorsCreateSSTable.get(0).toString());
         }
     }
 
-    private void addFileTable(final File file) {
+    private void addFileTable(final List<Path> listErrors, final Path path) {
         try {
-            fileTables.add(new FileTable(file));
+            fileTables.add(new FileTable(path.toFile()));
         } catch (IOException e) {
-            errorOccurred = true;
+            listErrors.add(path);
         }
     }
 
@@ -144,28 +144,29 @@ public class MyDAO implements DAO {
         }
         fileTables = new ArrayList<>();
 
+        final List<Path> errorsDeleteFiles = new ArrayList<>();
         try (Stream<Path> files = Files.walk(base.toPath())) {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(BASE_NAME + SUFFIX))
                     .forEach(p -> {
                         if (getGenerationOf(p.getFileName().toString()) != generation) {
-                            deleteFile(p);
+                            deleteFile(errorsDeleteFiles, p);
                         }
                     });
         }
 
-        if (errorOccurred) {
-            throw new IOException("Can not delete file");
+        if (!errorsDeleteFiles.isEmpty()) {
+            throw new IOException("Can not delete file " + errorsDeleteFiles.get(0).toString());
         }
 
         fileTables.add(new FileTable(dest));
     }
 
-    private void deleteFile(final Path path) {
+    private void deleteFile(final List<Path> errorsList, final Path path) {
         try {
             Files.delete(path);
         } catch (IOException e) {
-            errorOccurred = true;
+            errorsList.add(path);
         }
     }
 
