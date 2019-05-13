@@ -197,7 +197,7 @@ public class FileTable implements Table, Closeable {
     }
 
     private class MyRuntimeException extends RuntimeException {
-        MyRuntimeException(String message, Throwable cause) {
+        MyRuntimeException(final String message, final Throwable cause) {
             super(message, cause);
         }
     }
