@@ -166,7 +166,7 @@ public class FileTable implements Table, Closeable {
     @NotNull
     @Override
     public Iterator<Cell> iterator(@NotNull final ByteBuffer from) throws IOException {
-        return new Iterator<Cell>() {
+        return new Iterator<>() {
             int next = position(from);
 
             @Override
@@ -179,29 +179,14 @@ public class FileTable implements Table, Closeable {
                 if (!hasNext()) {
                     throw new NoSuchElementException("FileTable iterator has not next element");
                 }
-                RuntimeException runtimeException;
+
                 try {
                     return cellAt(next++);
                 } catch (IOException e) {
-                    e.printStackTrace();
-                    runtimeException = new RuntimeException("Next cell not found", e);
+                    throw new RuntimeException("Unable to read cell at position " + next, e);
                 }
-                throw runtimeException;
             }
         };
-    }
-
-    @Override
-    public Cell get(@NotNull final ByteBuffer key) throws IOException {
-        final int position = position(key);
-        if (position < 0 || position >= rows) {
-            throw new NoSuchElementException("");
-        }
-        final Cell cell = cellAt(position);
-        if (!cell.getKey().equals(key)) {
-            throw new NoSuchElementException("");
-        }
-        return cell;
     }
 
     @Override

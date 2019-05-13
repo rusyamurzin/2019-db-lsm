@@ -74,7 +74,7 @@ public class MyDAO implements DAO {
      * Iterator for only alive cells.
      * @param from value of key of started position iterator
      * @return Iterator with alive cells
-     * @throws IOException if memTable.iterator(from) is failed
+     * @throws IOException if fileTable.iterator(from) is failed
      */
     private Iterator<Cell> iteratorAliveCells(@NotNull final ByteBuffer from) throws IOException {
         final List<Iterator<Cell>> listIterators = new ArrayList<>();
@@ -82,8 +82,7 @@ public class MyDAO implements DAO {
             listIterators.add(fileTable.iterator(from));
         }
 
-        final Iterator<Cell> memIterator = memTable.iterator(from);
-        listIterators.add(memIterator);
+        listIterators.add(memTable.iterator(from));
         final Iterator<Cell> cells = Iters.collapseEquals(
                 Iterators.mergeSorted(listIterators, Cell.COMPARATOR),
                 Cell::getKey

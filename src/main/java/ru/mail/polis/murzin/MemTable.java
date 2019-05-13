@@ -4,7 +4,6 @@ import com.google.common.collect.Iterators;
 
 import org.jetbrains.annotations.NotNull;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.SortedMap;
@@ -20,13 +19,13 @@ public class MemTable implements Table {
 
     @NotNull
     @Override
-    public Iterator<Cell> iterator(@NotNull final ByteBuffer from) throws IOException {
+    public Iterator<Cell> iterator(@NotNull final ByteBuffer from) {
         return Iterators.transform(
                 map.tailMap(from).entrySet().iterator(),
                 e -> new Cell(e.getKey(), e.getValue()));
     }
 
-    void upsert(@NotNull final ByteBuffer key, @NotNull final ByteBuffer value) throws IOException {
+    void upsert(@NotNull final ByteBuffer key, @NotNull final ByteBuffer value) {
         final Value previous = map.put(key.duplicate(), Value.of(value.duplicate()));
         if (previous == null) {
             sizeInBytes += key.remaining() + value.remaining() + Long.BYTES;
@@ -37,20 +36,12 @@ public class MemTable implements Table {
         }
     }
 
-    void remove(@NotNull final ByteBuffer key) throws IOException {
+    void remove(@NotNull final ByteBuffer key) {
         final Value previous = map.put(key.duplicate(), Value.tombstone());
         if (previous == null) {
             sizeInBytes += key.remaining() + Long.BYTES;
         } else if (!previous.isRemoved()) {
             sizeInBytes -= previous.getData().remaining();
         }
-    }
-
-    @Override
-    public Cell get(@NotNull final ByteBuffer key) throws IOException {
-        final Value value = map.get(key);
-        return value == null
-                ? null
-                : new Cell(key.duplicate(), value);
     }
 }

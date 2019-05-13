@@ -39,7 +39,7 @@ public final class Value implements Comparable<Value> {
      */
     public ByteBuffer getData() {
         if (data == null) {
-            throw new IllegalArgumentException("");
+            throw new IllegalStateException("");
         }
         return data.asReadOnlyBuffer();
     }
