@@ -183,7 +183,7 @@ public class FileTable implements Table, Closeable {
                 try {
                     return cellAt(next++);
                 } catch (IOException e) {
-                    throw new MyRuntimeException("Unable to read cell at position " + next, e);
+                    throw new CellReadRuntimeException("Unable to read cell at position " + next, e);
                 }
             }
         };
@@ -193,12 +193,6 @@ public class FileTable implements Table, Closeable {
     public void close() throws IOException {
         if (fileChannel != null) {
             fileChannel.close();
-        }
-    }
-
-    private class MyRuntimeException extends RuntimeException {
-        MyRuntimeException(final String message, final Throwable cause) {
-            super(message, cause);
         }
     }
 }
